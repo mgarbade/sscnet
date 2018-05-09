@@ -43,7 +43,7 @@ function genSUNCGdataScript(sceneId)
         extCam2World = [[1 0 0; 0 0 1; 0 1 0]*extCam2World(1:3,1:3) extCam2World([1,3,2],4)];
         
         %% generating scene voxels in camera view 
-        [sceneVox, voxOriginWorld] = getSceneVoxSUNCG(suncgDataPath,sceneId,cameraInfo(cameraId).floorId+1,cameraInfo(cameraId).roomId+1,extCam2World);
+        [sceneVox, voxOriginWorld, gridPtsLabel, gridPtsLabel_d4,belowFloor, aboveCeiling, inRoom]  = getSceneVoxSUNCG(suncgDataPath,sceneId,cameraInfo(cameraId).floorId+1,cameraInfo(cameraId).roomId+1,extCam2World);
         camPoseArr = [extCam2World',[0;0;0;1]];
         camPoseArr = camPoseArr(:);
         
@@ -58,6 +58,19 @@ end
 
 %% visulizing 
 %{
+       %% Save downsampled version of tsdf
+        tsdfFilename = [depthFilename(1:(end-4)),'_tsdf_d4.mat'];
+        outsideFOVFilename = [depthFilename(1:(end-4)),'_outsideFOV_d4.mat'];
+        
+        % gridPtsLabel, belowFloor, aboveCeiling : XYZ -> 60x60x36
+        % belowFloor = permute(belowFloor,[1,3,2]);
+        % aboveCeiling = permute(aboveCeiling,[1,3,2]);
+        % inRoom = permute(inRoom,[1,3,2]);
+        gridPtsLabel_d4 = uint8(gridPtsLabel_d4);
+        save([depthFilename(1:(end-4)),'_gridPtsLabel_d4.mat'], 'gridPtsLabel_d4');
+        save([depthFilename(1:(end-4)),'_belowFloor_d4.mat'], 'belowFloor');
+        save([depthFilename(1:(end-4)),'_aboveCeiling_d4.mat'], 'aboveCeiling');
+        save([depthFilename(1:(end-4)),'_inRoom_d4.mat'], 'inRoom');
 volume_param;
 extWorld2Cam = inv([extCam2World;[0,0,0,1]]);
 [gridPtsWorldX,gridPtsWorldY,gridPtsWorldZ] = ndgrid(voxOriginWorld(1):voxUnit:(voxOriginWorld(1)+(voxSize(1)-1)*voxUnit), ...
@@ -76,6 +89,10 @@ extWorld2Cam = inv([extCam2World;[0,0,0,1]]);
  outsideFOV = gridPtsPixX <= validDepthrane(2) | gridPtsPixX > validDepthrane(4) | ...
               gridPtsPixY <= validDepthrane(1) | gridPtsPixY > validDepthrane(3);
 
+         a = reshape(outsideFOV,[240,240,144]);
+         outsideFOV_small = downSample(a,4);
+         % outsideFOV_small = permute(outsideFOV_small,[1,3,2]);
+         save(outsideFOVFilename,'outsideFOV_small')
  gridPtsPixX = gridPtsPixX(validPix);
  gridPtsPixY = gridPtsPixY(validPix);
  gridPtsPixDepth = depthInpaint(sub2ind(size(depthInpaint),gridPtsPixY',gridPtsPixX'))';
