@@ -87,38 +87,31 @@ void SuncgDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype> *> &bottom,
     Shuffle();
   }
 
-  LOG(INFO) << "Read camera information";
-  // Copy camera information to GPU
-  cam_info[0] = Dtype(frame_width);
-  cam_info[1] = Dtype(frame_height);
-  for (int i = 0; i < 9; ++i)
-    cam_info[i + 2] = cam_K[i];
-  for (int i = 0; i < 16; ++i)
-    cam_info[i + 11] = 0.0f;
-  CUDA_CHECK(cudaMalloc(&cam_info_GPU, 27 * sizeof(Dtype)));
+  // LOG(INFO) << "Read camera information";
+  // // Copy camera information to GPU
+  // cam_info[0] = Dtype(frame_width);
+  // cam_info[1] = Dtype(frame_height);
+  // for (int i = 0; i < 9; ++i)
+  //   cam_info[i + 2] = cam_K[i];
+  // for (int i = 0; i < 16; ++i)
+  //   cam_info[i + 11] = 0.0f;
+  // CUDA_CHECK(cudaMalloc(&cam_info_GPU, 27 * sizeof(Dtype)));
 
-  LOG(INFO) << "Set voxel volume parameters and copy them to GPU";
-  vox_info[0] = vox_unit;
-  vox_info[1] = vox_margin;
-  for (int i = 0; i < 3; ++i)
-    vox_info[i + 2] = Dtype(data_crop_vox_size[i]);
-  CUDA_CHECK(cudaMalloc(&vox_info_GPU, 8 * sizeof(Dtype)));
+  // LOG(INFO) << "Set voxel volume parameters and copy them to GPU";
+  // vox_info[0] = vox_unit;
+  // vox_info[1] = vox_margin;
+  // for (int i = 0; i < 3; ++i)
+  //   vox_info[i + 2] = Dtype(data_crop_vox_size[i]);
+  // CUDA_CHECK(cudaMalloc(&vox_info_GPU, 8 * sizeof(Dtype)));
 
   LOG(INFO) << "Allocating data";
   LOG(INFO) << "data_num_channel: "<< data_num_channel;
-  // GPU malloc depth data
-  CUDA_CHECK(cudaMalloc(&depth_data_GPU,
-                        frame_height * frame_width * sizeof(Dtype)));
 
   // GPU malloc voxel volume weights
   CUDA_CHECK(cudaMalloc(&vox_weight_GPU,
                         data_crop_vox_size[0] * data_crop_vox_size[1] *
                         data_crop_vox_size[2] * sizeof(Dtype)));
-
-
   size_t memoryBytes = 0;
-//  std::cout << (train_me ? "* " : "  ");
-//  std::cout << name << std::endl;
 
   // Determine if data should be cropped
   is_cropping_data = data_crop_vox_size[0] < data_full_vox_size[0] ||
@@ -196,56 +189,15 @@ void SuncgDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype> *> &bottom,
     }
   }
 
-//  if (top.size() > 5) {
-//    data_dim[2] = 480;
-//    data_dim[3] = 640;
-//    data_dim[4] = 1;
-//    top[5]->Reshape(data_dim);
-//    for (int j = 0; j < this->PREFETCH_COUNT; ++j) {
-//      this->prefetch_[j].mutable_blob(5)->Reshape(data_dim);
-//    }
-//  }
-
-//
-//  out[0]->receptive_field.resize(data_dim.size() - 2);  fill_n(out[0]->receptive_field.begin(),  data_dim.size() - 2, 1);
-//  out[0]->receptive_gap.resize(data_dim.size() - 2);    fill_n(out[0]->receptive_gap.begin(),    data_dim.size() - 2, 1);
-//  out[0]->receptive_offset.resize(data_dim.size() - 2); fill_n(out[0]->receptive_offset.begin(), data_dim.size() - 2, 0);
-//  memoryBytes += out[0]->Malloc(data_dim);
-//
-//  // Occupancy label
-//  out[1]->need_diff = false;
-//  data_dim[1] = 1;
-//  data_dim[2] = label_vox_size[0];
-//  data_dim[3] = label_vox_size[1];
-//  data_dim[4] = label_vox_size[2];
-//  memoryBytes += out[1]->Malloc(data_dim);
-//
-//  // Occupancy weight
-//  out[2]->need_diff = false;
-//  data_dim[1] = 2;
-//  memoryBytes += out[2]->Malloc(data_dim);
-//
-//  // Segmentation label
-//  out[3]->need_diff = false;
-//  data_dim[1] = 1;
-//  memoryBytes += out[3]->Malloc(data_dim);
-//
-//  // Segmentation weight
-//  out[4]->need_diff = false;
-//  data_dim[1] = num_segmentation_class;
-//  memoryBytes += out[4]->Malloc(data_dim);
-//
-//  // Segmentation surface weight
-//  out[5]->need_diff = false;
-//  memoryBytes += out[5]->Malloc(data_dim);
-//
-//  // prefetch();
-//  lock = std::async(std::launch::async, &SUNCGDataLayer::prefetch, this);
-
-  // return memoryBytes;
 }
 
 
+
+
+
+
+
+//////////////////////////// LOAD BATCH /////////////////////////////
 template<typename Dtype>
 void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
   // LOG(INFO) << "Loading " << batch;
@@ -411,29 +363,28 @@ void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
         }
 
     // Fuse frame into voxel volume
-    if (data_param.data_type() == SuncgDataParameter_DATA_OCCUPANCY ){
-        Dtype *  occupancy_label_crop_GPU; 
-        cudaMalloc(&occupancy_label_crop_GPU, num_crop_voxels* sizeof(Dtype));
-        cudaMemcpy(occupancy_label_crop_GPU, occupancy_label_crop, num_crop_voxels * sizeof(Dtype), cudaMemcpyHostToDevice);
-        int THREADS_NUM = 1024;
-        int BLOCK_NUM = int((num_crop_voxels + size_t(THREADS_NUM) - 1) / THREADS_NUM);
-        CompleteTSDF<<< BLOCK_NUM, THREADS_NUM >>>(vox_info_GPU, occupancy_label_crop_GPU, tmp_tsdf_data_GPU);
-        
-        cudaFree(occupancy_label_crop_GPU);
-        CUDA_CHECK(cudaGetLastError());
+    
+    // int frame_width  = cam_info_CPU[0];
+    // int frame_height = cam_info_CPU[1];
+    // int vox_size[3];
+    // for (int i = 0; i < 3; ++i)
+    //   vox_size[i] = vox_info_CPU[i + 2];
+    // int num_crop_voxels = vox_size[0] * vox_size[1] * vox_size[2];
+  
+    // Read mat input 
+    Dtype *  vox_binary_GPU;
+    CUDA_CHECK(cudaMalloc(&vox_binary_GPU, num_crop_voxels * sizeof(Dtype)));
+    GPU_set_zeros(num_crop_voxels, vox_binary_GPU);
+  
+    // // from depth map to binaray voxel representation 
+    // depth2Grid<<<frame_width,frame_height>>>(cam_info_GPU, vox_info_GPU, depth_data_GPU, vox_binary_GPU);
+    // CUDA_CHECK(cudaGetLastError());
 
-    }else{
-      if(data_param.with_projection_tsdf()){
-        int num_blocks = data_crop_vox_size[2];
-        int num_threads = data_crop_vox_size[1];
-        GPU_set_zeros(num_crop_voxels, vox_weight_GPU);
-        Integrate <<< data_crop_vox_size[2], data_crop_vox_size[1] >>> (cam_info_GPU, vox_info_GPU, depth_data_GPU, tmp_tsdf_data_GPU, vox_weight_GPU, tmp_vox_height_GPU);
-        CUDA_CHECK(cudaGetLastError());
-      }else{
-        ComputeTSDF(cam_info, vox_info, cam_info_GPU, vox_info_GPU, depth_data_GPU, tmp_tsdf_data_GPU, tmp_vox_height_GPU);
-        CUDA_CHECK(cudaGetLastError());
-      }      
-    }
+    // distance transform 
+    int THREADS_NUM = 1024;
+    int BLOCK_NUM = int((num_crop_voxels + size_t(THREADS_NUM) - 1) / THREADS_NUM);
+    SquaredDistanceTransform <<< BLOCK_NUM, THREADS_NUM >>> (cam_info_GPU, vox_info_GPU, depth_data_GPU, vox_binary_GPU, vox_tsdf_GPU, vox_height_GPU);
+    CUDA_CHECK(cudaFree(vox_binary_GPU));
 
 
     // Copy voxel volume back to CPU
@@ -503,6 +454,7 @@ void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
     // Save voxel indices of background
     // Set label weights of occupied voxels as 1
     int num_occ_voxels = 0;
+    int num_occ_voxels2 = 0;
     std::vector<int> bg_voxel_idx;
     Dtype *occupancy_weight = new Dtype[num_label_voxels];
     Dtype *segmentation_weight = new Dtype[num_label_voxels];
@@ -514,6 +466,7 @@ void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
 
     for (int i = 0; i < num_label_voxels; ++i) {
       if (Dtype(occupancy_label_downscale[i]) > 0) {
+        num_occ_voxels2++;
           if (tsdf_data_downscale[i] < -0.5) {
             // forground voxels in unobserved region
             num_occ_voxels++;
@@ -549,21 +502,20 @@ void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
     int segnegtotal = floor(sample_neg_obj_ratio * (float) num_occ_voxels);
 
     if (bg_voxel_idx.size() > 0) {
-      std::uniform_real_distribution<double> tmp_rand_dist(
-          0, (float) (bg_voxel_idx.size()) - 0.0001);
+      std::uniform_real_distribution<double> tmp_rand_dist(0, (float) (bg_voxel_idx.size()) - 0.0001);
       for (int i = 0; i < num_occ_voxels; ++i) {
         int rand_idx = (int) (std::floor(tmp_rand_dist(tmp_rand_mt)));
-        occupancy_weight[bg_voxel_idx[rand_idx]] = Dtype(
-            occupancy_class_weight[0]);
+        occupancy_weight[bg_voxel_idx[rand_idx]] = Dtype(occupancy_class_weight[0]);
         if (segnegcout < segnegtotal && Dtype(segmentation_label_downscale[bg_voxel_idx[rand_idx]]) < 255 ) {
           // background voxels within room 
-          segmentation_weight[bg_voxel_idx[rand_idx]] = Dtype(
-              segmentation_class_weight[0]);
+          segmentation_weight[bg_voxel_idx[rand_idx]] = Dtype(segmentation_class_weight[0]);
           segnegcout++;
         }
       }
     }
     
+    std::cout << "num_occ_voxels = " << num_occ_voxels << " num_occ_voxels2 = " << num_occ_voxels2  << " segnegcout = " << segnegcout << " segnegtotal = " << segnegtotal << std::endl;
+
     if (occ_weight != nullptr) {
       memcpy(occ_weight->mutable_cpu_data() + batch_idx * num_label_voxels,
              occupancy_weight, num_label_voxels * sizeof(Dtype));

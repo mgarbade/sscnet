@@ -306,7 +306,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 147 (last added: recurrent_param)
+// LayerParameter next available layer-specific ID: 149 (last added: mat_write_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -403,6 +403,9 @@ message LayerParameter {
   optional ThresholdParameter threshold_param = 128;
   optional TileParameter tile_param = 138;
   optional WindowDataParameter window_data_param = 129;
+
+  optional MatReadParameter mat_read_param = 147;
+  optional MatWriteParameter mat_write_param = 148;
 
   optional SuncgDataParameter suncg_data_param = 1000;
 }
@@ -884,6 +887,20 @@ message LRNParameter {
     CUDNN = 2;
   }
   optional Engine engine = 6 [default = DEFAULT];
+}
+
+message MatReadParameter {
+  required string prefix = 1;
+  optional string source = 2 [default = ""];
+  optional int32 strip = 3 [default = 0];
+  optional int32 batch_size = 4 [default = 1];
+}
+
+message MatWriteParameter {
+  required string prefix = 1;
+  optional string source = 2 [default = ""];
+  optional int32 strip = 3 [default = 0];
+  optional int32 period = 4 [default = 1];
 }
 
 message MemoryDataParameter {

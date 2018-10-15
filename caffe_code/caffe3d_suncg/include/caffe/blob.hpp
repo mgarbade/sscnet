@@ -136,13 +136,16 @@ class Blob {
   inline int height() const { return LegacyShape(2); }
   /// @brief Deprecated legacy shape accessor width: use shape(3) instead.
   inline int width() const { return LegacyShape(3); }
+
+  inline int z() const { return LegacyShape(4); }
+
   inline int LegacyShape(int index) const {
-    CHECK_LE(num_axes(), 4)
-        << "Cannot use legacy accessors on Blobs with > 4 axes.";
-    CHECK_LT(index, 4);
-    CHECK_GE(index, -4);
+    CHECK_LE(num_axes(), 5)
+        << "Cannot use legacy accessors on Blobs with > 5 axes.";
+    CHECK_LT(index, 5);
+    CHECK_GE(index, -5);
     if (index >= num_axes() || index < -num_axes()) {
-      // Axis is out of range, but still in [0, 3] (or [-4, -1] for reverse
+      // Axis is out of range, but still in [0, 3] (or [-5, -1] for reverse
       // indexing) -- this special case simulates the one-padding used to fill
       // extraneous axes of legacy blobs.
       return 1;
@@ -226,6 +229,24 @@ class Blob {
   Dtype* mutable_gpu_data();
   Dtype* mutable_cpu_diff();
   Dtype* mutable_gpu_diff();
+  // jay add
+  const Dtype* cpu_data_at(const int n = 0, const int c = 0,
+			   const int h = 0, const int w = 0) const;
+  const Dtype* gpu_data_at(const int n = 0, const int c = 0,
+			   const int h = 0, const int w = 0) const;
+  const Dtype* cpu_diff_at(const int n = 0, const int c = 0,
+			   const int h = 0, const int w = 0) const;
+  const Dtype* gpu_diff_at(const int n = 0, const int c = 0,
+			   const int h = 0, const int w = 0) const;
+  Dtype* mutable_cpu_data_at(const int n = 0, const int c = 0,
+			     const int h = 0, const int w = 0);
+  Dtype* mutable_gpu_data_at(const int n = 0, const int c = 0,
+			     const int h = 0, const int w = 0);
+  Dtype* mutable_cpu_diff_at(const int n = 0, const int c = 0,
+			     const int h = 0, const int w = 0);
+  Dtype* mutable_gpu_diff_at(const int n = 0, const int c = 0,
+			     const int h = 0, const int w = 0);
+  // end jay add
   void Update();
   void FromProto(const BlobProto& proto, bool reshape = true);
   void ToProto(BlobProto* proto, bool write_diff = false) const;
