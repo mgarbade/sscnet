@@ -1,4 +1,4 @@
-function [sceneVox, voxOriginWorld] = getSceneVoxSUNCG(pathToData,sceneId,floorId,roomId,extCam2World)
+function [sceneVox, voxOriginWorld, gridPtsLabel, gridPtsLabel_d4, belowFloor_d4, aboveCeiling_d4, inRoom_d4] = getSceneVoxSUNCG(pathToData, sceneId, floorId, roomId, extCam2World)
 % Notes: grid is Z up while the The loaded houses are Y up 
 %{
 pathToData = '/n/fs/suncg/data/planner5d/';
@@ -45,8 +45,16 @@ if exist([fullfile(pathToData,'room',sceneId,roomStruct.modelId) 'f.obj'],'file'
   [~,classRootId] = getobjclassSUNCG('floor',objcategory);
   gridPtsLabel(gridPtsObjWorldInd) = classRootId;  
 end
+a = reshape(inRoom,[240,240,144]);
+inRoom_d4 = downSample(a,4);
 
 
+
+
+a = abs(gridPtsWorld(3,:)) < floorZ - voxUnit/2;
+a = reshape(a,[240,240,144]);
+belowFloor_d4 = downSample(a,4);
+% belowFloor = permute(belowFloor,[1,3,2]);
 
 % find ceiling 
 if exist([fullfile(pathToData,'room',sceneId,roomStruct.modelId) 'c.obj'],'file')
@@ -56,6 +64,13 @@ if exist([fullfile(pathToData,'room',sceneId,roomStruct.modelId) 'c.obj'],'file'
   [~,classRootId] = getobjclassSUNCG('ceiling',objcategory);
   gridPtsLabel(gridPtsObjWorldInd) = classRootId;  
 end
+
+
+b = abs(gridPtsWorld(3,:)) > ceilZ + voxUnit/2;
+b = reshape(b,[240,240,144]);
+aboveCeiling_d4 = downSample(b,4);
+% aboveCeiling = permute(aboveCeiling,[1,3,2]);
+
 
 
 % Load walls
@@ -128,18 +143,26 @@ extWorld2Cam = inv([extCam2World;[0,0,0,1]]);
 gridPtsCam = extWorld2Cam(1:3,1:3)*gridPtsWorld + repmat(extWorld2Cam(1:3,4),1,size(gridPtsWorld,2));
 gridPtsPixX = gridPtsCam(1,:).*(camK(1,1))./gridPtsCam(3,:)+camK(1,3);
 gridPtsPixY = gridPtsCam(2,:).*(camK(2,2))./gridPtsCam(3,:)+camK(2,3);
-invalidPixInd = (gridPtsPixX < 0 | gridPtsPixX >= 640 | gridPtsPixY < 0 | gridPtsPixY >= 480);
+invalidPixInd = (gridPtsPixX < 0 | gridPtsPixX >= 640 | gridPtsPixY < 0 | gridPtsPixY >= 480);  % -> set to -3 in flippedVol
 gridPtsLabel(find(invalidPixInd)) = 0;
 
 % Remove grid points not in the room
 gridPtsLabel(~inRoom(:)&gridPtsLabel(:)==0) = 255;
 
-% Change coordinate axes XYZ -> YZX
+a = reshape(gridPtsLabel,[240,240,144]);
+gridPtsLabel_d4 = downSample(a,4);
+
+% Change coordinate axes XYZ -> YZX --> [2 3 1]
 extSwap = [0,1,0;0,0,1;1,0,0];
 [gridPtsX,gridPtsY,gridPtsZ] = ind2sub(voxSize,1:size(gridPtsLabel,2));
 gridPts = [gridPtsX(:),gridPtsY(:),gridPtsZ(:)]';
 gridPts = extSwap(1:3,1:3) * gridPts;
 gridPtsLabel(sub2ind(voxSizeTarget,gridPts(1,:)',gridPts(2,:)',gridPts(3,:)')) = gridPtsLabel;
+
+
+% GRID_PTS_LABEL
+
+
 
 % Save the volume
 sceneVox = reshape(gridPtsLabel,voxSizeTarget');
