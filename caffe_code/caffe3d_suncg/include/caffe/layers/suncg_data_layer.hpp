@@ -37,7 +37,8 @@ class SuncgDataLayer : public BasePrefetchingDataLayer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 0; }
   virtual inline int ExactNumTopBlobs() const { return -1; }
   virtual inline int MinTopBlobs() const { return 2; }
-  virtual inline int MaxTopBlobs() const { return 5; }
+//   virtual inline int MaxTopBlobs() const { return 5; }
+  virtual inline int MaxTopBlobs() const { return 7; }
 
  protected:
   virtual void load_batch(Batch<Dtype>* batch);
@@ -96,6 +97,8 @@ class SuncgDataLayer : public BasePrefetchingDataLayer<Dtype> {
   Dtype * segmentation_label_GPU;
   Dtype * segmentation_weight_GPU;
   Dtype * segmentation_surf_weight_GPU;
+  Dtype * vox_bg_GPU;
+  Dtype * vox_free_GPU;
 
   shared_ptr<Caffe::RNG> rng_;
 };

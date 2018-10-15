@@ -136,6 +136,14 @@ void SuncgDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype> *> &bottom,
         batch_size * data_num_channel * num_full_voxels * sizeof(Dtype);
   }
 
+  // MG:
+  CUDA_CHECK(cudaMalloc(&vox_bg_GPU, 
+                        batch_size * num_label_voxels * sizeof(Dtype)));
+  memoryBytes += batch_size * num_label_voxels * sizeof(Dtype);    
+  CUDA_CHECK(cudaMalloc(&vox_free_GPU,
+                        batch_size * num_label_voxels * sizeof(Dtype)));
+  memoryBytes += batch_size * num_label_voxels * sizeof(Dtype);    
+
   int num_label_voxels =
       label_vox_size[0] * label_vox_size[1] * label_vox_size[2];
   CUDA_CHECK(cudaMalloc(&occupancy_label_GPU,
@@ -203,7 +211,11 @@ void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
   // LOG(INFO) << "Loading " << batch;
   const SuncgDataParameter& data_param =
       this->layer_param_.suncg_data_param();
-  Blob<Dtype> *tsdf = nullptr, *occ_label = nullptr, *occ_weight = nullptr;
+  Blob<Dtype> *tsdf = nullptr, 
+              *occ_label = nullptr, 
+              *occ_weight = nullptr, 
+              *vox_bg = nullptr, 
+              *vox_free = nullptr;
   if (batch->size() > 3) {
     occ_label = batch->mutable_blob(3);
     occ_weight = batch->mutable_blob(4);
@@ -216,6 +228,10 @@ void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
   tsdf = batch->mutable_blob(0);
   Blob<Dtype> *seg_label = batch->mutable_blob(1);
   Blob<Dtype> *seg_weight = batch->mutable_blob(2);
+  
+  // MG:
+  Blob<Dtype> *vox_bg = batch->mutable_blob(5);
+  Blob<Dtype> *seg_free = batch->mutable_blob(6);
 
   for (size_t batch_idx = 0; batch_idx < batch_size; ++batch_idx) {
     // Get random image
@@ -345,6 +361,20 @@ void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
                                    num_crop_voxels * sizeof(Dtype),
                                    cudaMemcpyHostToDevice));
 
+    // Dtype *vox_bg_CPU = new Dtype[num_crop_voxels];
+    // memset(vox_bg_CPU, 0, num_crop_voxels * sizeof(Dtype));
+    // CUDA_CHECK(cudaMemcpy(vox_bg_GPU, vox_bg_CPU,
+    //                               num_crop_voxels * sizeof(Dtype),
+    //                               cudaMemcpyHostToDevice));
+
+    // Dtype *vox_free_CPU = new Dtype[num_crop_voxels];
+    // memset(vox_free_CPU, 0, num_crop_voxels * sizeof(Dtype));
+    // CUDA_CHECK(cudaMemcpy(vox_free_GPU, vox_free_CPU,
+    //                               num_crop_voxels * sizeof(Dtype),
+    //                               cudaMemcpyHostToDevice));
+
+
+
     // Retreive cropped labels
     Dtype *occupancy_label_crop = new Dtype[num_crop_voxels];
     Dtype *segmentation_label_crop = new Dtype[num_crop_voxels];
@@ -458,10 +488,18 @@ void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
     std::vector<int> bg_voxel_idx;
     Dtype *occupancy_weight = new Dtype[num_label_voxels];
     Dtype *segmentation_weight = new Dtype[num_label_voxels];
+
+    Dtype *vox_bg_CPU = new Dtype[num_label_voxels];
+    Dtype *vox_free_CPU = new Dtype[num_label_voxels];
+
     //Dtype *segmentation_surf_weight = new Dtype[num_label_voxels];
 
     memset(occupancy_weight, 0, num_label_voxels * sizeof(Dtype));
     memset(segmentation_weight, 0, num_label_voxels * sizeof(Dtype));
+    
+    memset(vox_bg_CPU, 0, num_label_voxels * sizeof(Dtype));
+    memset(vox_free_CPU, 0, num_label_voxels * sizeof(Dtype));
+    
     //memset(segmentation_surf_weight, 0, num_label_voxels * sizeof(Dtype));
 
     for (int i = 0; i < num_label_voxels; ++i) {
@@ -475,7 +513,15 @@ void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
       } else {
         if (tsdf_data_downscale[i] < -0.5) {
           bg_voxel_idx.push_back(i); // background voxels in unobserved regoin 
-        }
+	  
+          // if (float(segmentation_label_downscale[i]) < 255) { // MG: Create a mask for occluded empty voxels
+          vox_bg_CPU[i] = 1.0; 
+          // }
+
+        } else {
+	  vox_free_CPU[i] = 1.0;  // MG: empty voxel in observed free space
+
+	}
       }
 
       if (Dtype(segmentation_label_downscale[i]) > 0 && Dtype(segmentation_label_downscale[i]) < 255) {
@@ -547,6 +593,15 @@ void SuncgDataLayer<Dtype>::load_batch(Batch<Dtype> *batch) {
                               num_crop_voxels * sizeof(Dtype),
                               cudaMemcpyDeviceToHost));
     }
+
+
+    CUDA_CHECK(cudaMemcpy(vox_bg->mutable_cpu_data() + batch_idx * num_crop_voxels, vox_bg_GPU,
+                          num_crop_voxels * sizeof(Dtype),
+                          cudaMemcpyDeviceToHost));
+    
+    CUDA_CHECK(cudaMemcpy(vox_free->mutable_cpu_data() + batch_idx * num_crop_voxels, vox_free_GPU,
+                          num_crop_voxels * sizeof(Dtype),
+                          cudaMemcpyDeviceToHost));                          
 
     // // Free memory
     delete[] depth_data;
